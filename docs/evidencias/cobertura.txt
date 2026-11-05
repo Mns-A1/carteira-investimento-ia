@@ -1,0 +1,21 @@
+Evidência de cobertura — gerada em 05/11/2026
+$ pytest --cov=src/app --cov-report=term-missing
+Name                            Stmts   Miss  Cover   Missing
+-------------------------------------------------------------
+src/app/__init__.py                 0      0   100%
+src/app/ai.py                      54      8    85%   75-88
+src/app/config.py                  11      0   100%
+src/app/database.py                13      4    69%   16-20
+src/app/main.py                    38      4    89%   21-24
+src/app/models.py                  83      0   100%
+src/app/routers/__init__.py         0      0   100%
+src/app/routers/auth.py            47      2    96%   31, 63
+src/app/routers/consultor.py       57      2    96%   50, 79
+src/app/routers/investidor.py      91     11    88%   92, 101-103, 109-112, 123-124, 133
+src/app/rules.py                   77      1    99%   91
+src/app/schemas.py                 54      1    98%   65
+src/app/security.py                36      5    86%   23-24, 36-37, 40
+src/app/services.py               167      9    95%   155, 160-163, 190, 247-249, 251
+-------------------------------------------------------------
+TOTAL                             728     47    94%
+37 passed, 1 warning in 24.29s

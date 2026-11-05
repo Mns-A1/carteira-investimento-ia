@@ -1,7 +1,7 @@
 # Spec.md — Sistema de Carteira de Investimentos com Consultoria Assistida por IA
 
-> Status: rascunho inicial para validação de tema (Semana 02)
-> Última atualização: --/--/----
+> Status: versão do MVP implementado, alinhada ao código (revisão final)
+> Última atualização: 05/11/2026
 
 ## 1. Visão Geral
 
@@ -59,23 +59,24 @@ Foram analisados dois sistemas existentes no mercado de finanças pessoais para 
 ## 3. Modelo de Domínio (entidades principais)
 
 - **Usuário** (atributos comuns: id, nome, email, perfil [Investidor | Consultor])
-- **Investidor** (perfil_risco: conservador | moderado | agressivo; consultor_vinculado)
+- **Investidor** (perfil_risco: conservador | moderado | agressivo; limite_concentracao, padrão 40%; consultor_vinculado)
 - **Consultor** (lista de investidores vinculados)
 - **Carteira** (pertence a um Investidor; contém lista de Investimentos)
-- **Investimento** (tipo: Tesouro Selic | Tesouro IPCA | Tesouro Educa+ | CDB | CDI | Ação | Poupança; valor_aplicado; data_aplicacao; percentual_alocado; status: ativo | inativo | expirado)
+- **Investimento** (tipo: Tesouro Selic | Tesouro IPCA | Tesouro Educa+ | CDB | CDI | Ação | Poupança; nome do ativo; valor_aplicado; data_aplicacao; data_vencimento (opcional); status: ativo | inativo | expirado; bloqueado; removido). O percentual de alocação não é armazenado: é calculado sobre os investimentos ativos da carteira.
 - **Ganho** (vinculado a um Investimento; valor_recebido; data_recebimento; tipo: dividendo | rendimento)
 - **PropostaDeRebalanceamento** (gerada por Consultor ou por análise de IA; contém lista de ajustes [de_ativo, para_ativo, percentual]; status: pendente | aceita | recusada | aceita_parcialmente; justificativa)
 - **AnaliseIA** (snapshot da carteira no momento da análise; score_risco; alertas_concentracao; sugestoes; consumida por PropostaDeRebalanceamento)
+- **Evento** (histórico de auditoria: tipo, descrição, data/hora e usuário responsável)
 
 ## 4. Requisitos Funcionais (notação EARS)
 
 ### 4.1 Gestão de Carteira (Investidor)
 
-- **RF01** — Quando o Investidor informar uma nova aplicação, o sistema deve registrar o investimento na carteira com tipo, valor, data e percentual de alocação.
-- **RF02** — O sistema deve, sempre que solicitado pelo Investidor, exibir a visão consolidada da carteira com valores aplicados, valores retirados e percentual de alocação por tipo de investimento.
+- **RF01** — Quando o Investidor informar uma nova aplicação, o sistema deve registrar o investimento na carteira com tipo, nome do ativo, valor, data de aplicação e vencimento (opcional), e calcular automaticamente o percentual de alocação.
+- **RF02** — O sistema deve, sempre que solicitado pelo Investidor, exibir a visão consolidada da carteira com valores aplicados, percentual de alocação por investimento e por classe (Tesouro, CDB/CDI, Ações, Poupança) e os alertas de concentração. O registro de valores retirados está fora do escopo do MVP (backlog).
 - **RF03** — Se um investimento atingir a data de vencimento, então o sistema deve alterar automaticamente seu status para "expirado".
 - **RF04** — O sistema deve impedir novo aporte em um investimento com status "expirado" ou "inativo".
-- **RF05** — Quando o Investidor solicitar a exclusão de um investimento sem aplicação ativa, o sistema deve permitir a remoção e registrar o evento no histórico.
+- **RF05** — Quando o Investidor solicitar a exclusão de um investimento sem aplicação ativa (inativo ou expirado), o sistema deve removê-lo da carteira de forma lógica, mantendo os ganhos já registrados nos relatórios, e registrar o evento no histórico.
 
 ### 4.2 Ganhos
 
@@ -94,8 +95,10 @@ Foram analisados dois sistemas existentes no mercado de finanças pessoais para 
 ### 4.4 Análise por IA
 
 - **RF14** — O sistema deve permitir a geração de uma análise de IA sobre a carteira de um Investidor, retornando dados estruturados: score de risco, alertas de concentração por ativo e sugestões de rebalanceamento.
-- **RF15** — Se algum ativo ultrapassar o limite de concentração definido (ex: 40% da carteira), então o sistema deve gerar um alerta de concentração e bloquear novas aplicações naquele ativo até revisão do Consultor.
+- **RF15** — Se um aporte fizer um ativo ultrapassar o limite de concentração (padrão 40% da carteira, com 3 ou mais ativos), então o sistema deve recusar o aporte, gerar um alerta e bloquear novas aplicações naquele ativo até a revisão do Consultor. O alerta também aparece na visão consolidada sempre que algum ativo estiver acima do limite.
 - **RF16** — O sistema deve utilizar a saída estruturada da IA apenas como insumo para gerar uma Proposta de Rebalanceamento — a aplicação do ajuste na carteira depende sempre da decisão do Investidor (RF11/RF12).
+- **RF17** — Quando o Investidor informar o e-mail de um Consultor, o sistema deve vinculá-lo ao Investidor, autorizando o Consultor a acompanhar a carteira; o Investidor pode desfazer o vínculo a qualquer momento.
+- **RF18** — Quando o Consultor definir um limite de concentração para um Investidor vinculado, o sistema deve usá-lo no lugar do padrão; quando o Consultor liberar um ativo bloqueado, o sistema deve voltar a aceitar aportes nele.
 
 ## 4.5 Requisitos Não Funcionais
 
@@ -108,6 +111,8 @@ Foram analisados dois sistemas existentes no mercado de finanças pessoais para 
 - **RNF07 — Portabilidade de dados:** O sistema deve utilizar um banco de dados relacional padrão (SQLite em desenvolvimento, com possibilidade de migração para PostgreSQL) sem dependência de fornecedor proprietário.
 - **RNF08 — Resiliência da IA:** O sistema deve validar o formato JSON retornado pela IA antes de processá-lo; uma resposta malformada deve ser descartada com log de erro, nunca aplicada à carteira (reforça RN04).
 - **RNF09 — Manutenibilidade:** O código deve seguir uma separação clara entre camada de regras de negócio, camada de acesso a dados e camada de exposição (API), facilitando testes e futuras alterações sem reescrever o sistema inteiro.
+- **RNF10 — Proteção contra força bruta:** Após 5 tentativas de login incorretas em 10 minutos, o sistema deve bloquear novas tentativas para aquele e-mail por até 10 minutos.
+- **RNF11 — Observabilidade:** O sistema deve registrar em log cada requisição (método, rota, status e tempo), as recusas por regras de negócio e as falhas da IA, e devolver o tempo de resposta no cabeçalho `X-Process-Time-ms`.
 
 ## 5. Glossário
 
@@ -133,10 +138,11 @@ Foram analisados dois sistemas existentes no mercado de finanças pessoais para 
 ## 6. Regras de Negócio Explícitas
 
 - **RN01** — Um investimento com status "expirado" ou "inativo" não pode receber novos aportes (suporta RF04).
-- **RN02** — O limite máximo de concentração por ativo é de 40% do valor total da carteira, salvo configuração específica pelo Consultor para aquele Investidor.
-- **RN03** — Toda proposta de rebalanceamento deve estar dentro do perfil de risco do Investidor (conservador, moderado ou agressivo); propostas fora desse limite são bloqueadas automaticamente pelo sistema.
+- **RN02** — O limite máximo de concentração por ativo é de 40% do valor total dos investimentos ativos, salvo configuração do Consultor para aquele Investidor. A regra só é verificada quando a carteira tem 3 ou mais ativos distintos (com menos, qualquer carteira excederia o limite). Nomes de ativo são comparados sem diferenciar maiúsculas e espaços. Um aporte que ultrapasse o limite é recusado e o ativo fica bloqueado para novos aportes até o Consultor liberá-lo. Ajustes aplicados por propostas aceitas não são bloqueados, mas podem gerar alerta.
+- **RN03** — Toda proposta de rebalanceamento deve manter a carteira dentro do perfil de risco do Investidor, medido pelo máximo de ações na carteira resultante: conservador 10%, moderado 30%, agressivo 60%. Propostas fora desse limite são bloqueadas automaticamente na criação e revalidadas no momento do aceite.
 - **RN04** — A IA nunca aplica mudanças diretamente na carteira; toda sugestão da IA passa a ser uma Proposta de Rebalanceamento sujeita à aprovação do Investidor.
 - **RN05** — Um Consultor só pode visualizar e propor mudanças em carteiras de Investidores explicitamente vinculados a ele.
+- **RN06** — Apenas investimentos com status ativo entram no cálculo de alocação e de concentração. Investimentos inativos ou expirados não recebem aportes (RN01).
 
 ## 7. Casos de Uso (resumo inicial)
 
@@ -147,20 +153,44 @@ Foram analisados dois sistemas existentes no mercado de finanças pessoais para 
 5. **UC05 — Propor rebalanceamento:** Consultor (com ou sem apoio da análise de IA) cria proposta de ajuste.
 6. **UC06 — Responder proposta:** Investidor aceita, recusa ou aceita parcialmente a proposta recebida.
 7. **UC07 — Editar/excluir investimento:** Investidor remove investimento sem aplicação ativa.
+8. **UC08 — Vincular consultor:** Investidor autoriza um Consultor a acompanhar sua carteira.
+9. **UC09 — Gerenciar limite e bloqueios:** Consultor define o limite de concentração e libera ativos bloqueados.
+10. **UC10 — Consultar histórico:** Investidor consulta a trilha de auditoria da carteira.
 
-## 8. Backlog Inicial (alto nível — será refinado em tasks.md)
+## 8. Backlog (itens do MVP concluídos; pendências no fim)
 
-- [ ] Modelagem do banco de dados (entidades da seção 3)
-- [ ] CRUD de investimentos (Investidor)
-- [ ] Cálculo de consolidado da carteira
-- [ ] Registro e cálculo de ganhos
-- [ ] Vínculo Consultor–Investidor
-- [ ] Fluxo de criação e resposta de proposta de rebalanceamento
-- [ ] Integração com IA (prompt estruturado + parsing de JSON)
-- [ ] Regras de bloqueio (concentração, perfil de risco, status expirado)
-- [ ] Autenticação e diferenciação de perfil (Investidor vs Consultor)
+- [x] Modelagem do banco de dados (entidades da seção 3)
+- [x] CRUD de investimentos (Investidor)
+- [x] Cálculo de consolidado da carteira
+- [x] Registro e cálculo de ganhos
+- [x] Vínculo Consultor–Investidor
+- [x] Fluxo de criação e resposta de proposta de rebalanceamento
+- [x] Integração com IA (prompt estruturado + parsing de JSON)
+- [x] Regras de bloqueio (concentração, perfil de risco, status expirado)
+- [x] Autenticação e diferenciação de perfil (Investidor vs Consultor)
 
-## 9. Pendências para validação com o professor
+- [ ] Registro de retiradas (valores retirados)
+- [ ] Valores monetários com Decimal ou centavos inteiros
+- [ ] Token de sessão em cookie httpOnly
+- [ ] Exceções de domínio nos serviços (hoje elas levantam erros HTTP)
 
-- Confirmar se o vínculo Consultor–Investidor pode ser 1:N (um consultor, vários investidores) — presumido que sim.
-- Confirmar se o uso de dados de mercado (ex: taxa Selic atual) pode ser mockado/manual ao invés de integração externa em tempo real, dado o risco de dependência de dado externo (vedado pela seção 5).
+## 9. Decisões de implementação (mudanças em relação à versão inicial)
+
+| # | Item | Decisão tomada | Motivo |
+|---|---|---|---|
+| 1 | RF01 | O percentual de alocação é calculado, não informado | Muda a cada novo aporte; armazenar geraria dados desatualizados |
+| 2 | RF02 | Sem registro de retiradas no MVP | Fora do tempo disponível; vai para o backlog |
+| 3 | RN02 | Limite só vale com 3 ou mais ativos; aporte que estoura é recusado e trava o ativo | Com 1 ou 2 ativos, qualquer carteira passaria de 40% e o sistema ficaria inutilizado |
+| 4 | RN03 | Limites de ações por perfil: 10%, 30% e 60% | A versão inicial não definia valores concretos |
+| 5 | RF08 / RF17 | O vínculo é iniciado pelo Investidor | O dono dos dados autoriza quem os acompanha |
+| 6 | RF05 | Remoção lógica, preservando ganhos | Manter o lucro visível, como definido no caderno de requisitos inicial |
+| 7 | RF03 | Expiração verificada a cada consulta ou aporte, sem job agendado | Simplicidade; o resultado para o usuário é o mesmo |
+| 8 | RF14 | Sem chave da IA, a análise roda em modo local e a resposta marca fonte "regras-locais" | Permite usar e demonstrar o sistema sem depender de serviço externo |
+
+## 10. Limitações conhecidas
+
+- Um rebalanceamento aceito pode concentrar valor em um único ativo; o sistema mostra alerta, mas não bloqueia.
+- A chamada real ao Claude depende de chave de API e não é coberta por teste automatizado (os testes cobrem a validação da resposta e as falhas).
+- Valores monetários usam ponto flutuante, com arredondamento a 2 casas.
+- O bloqueio de tentativas de login fica em memória: zera ao reiniciar o sistema.
+- O token de sessão fica no localStorage do navegador; o texto exibido é sempre escapado para reduzir o risco de XSS.

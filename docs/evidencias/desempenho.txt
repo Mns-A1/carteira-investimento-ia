@@ -1,0 +1,3 @@
+Evidência de desempenho (RNF01) — gerada em 05/11/2026
+$ pytest tests/test_desempenho.py -s
+[RNF01] 300 investimentos, 20 consultas: mediana=12 ms, p95=12 ms

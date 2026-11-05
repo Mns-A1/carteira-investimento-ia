@@ -1,0 +1,40 @@
+Evidência de testes — gerada em 05/11/2026
+$ pytest -v
+tests/test_api.py::test_registro_login_e_rotas_por_perfil PASSED
+tests/test_api.py::test_email_duplicado_e_senha_errada PASSED
+tests/test_api.py::test_percentual_e_consolidado PASSED
+tests/test_api.py::test_aporte_bloqueado_em_inativo PASSED
+tests/test_api.py::test_expiracao_automatica_e_bloqueio_de_aporte PASSED
+tests/test_api.py::test_vencimento_no_passado_e_rejeitado PASSED
+tests/test_api.py::test_concentracao_bloqueia_e_consultor_libera PASSED
+tests/test_api.py::test_consultor_define_limite_e_alerta_aparece PASSED
+tests/test_api.py::test_consultor_so_acessa_investidores_vinculados PASSED
+tests/test_api.py::test_investidor_nao_acessa_investimento_de_outro PASSED
+tests/test_api.py::test_ganhos_por_ativo_e_consolidado_no_mes PASSED
+tests/test_api.py::test_remocao_so_sem_aplicacao_ativa_e_ganhos_permanecem PASSED
+tests/test_api.py::test_proposta_fora_do_perfil_e_bloqueada PASSED
+tests/test_api.py::test_proposta_aceita_aplica_ajuste_na_carteira PASSED
+tests/test_api.py::test_proposta_recusada_nao_altera_e_consultor_ve PASSED
+tests/test_api.py::test_aceite_parcial PASSED
+tests/test_api.py::test_parcial_sem_ids_e_rejeitada PASSED
+tests/test_api.py::test_analise_local_e_proposta_da_ia_nao_altera_carteira PASSED
+tests/test_api.py::test_analise_de_carteira_vazia PASSED
+tests/test_api.py::test_falha_da_ia_retorna_502_sem_quebrar_o_sistema PASSED
+tests/test_api.py::test_resposta_malformada_da_ia_e_descartada PASSED
+tests/test_api.py::test_validar_resposta_da_ia PASSED
+tests/test_api.py::test_tela_web_e_servida PASSED
+tests/test_api.py::test_login_bloqueado_apos_tentativas_erradas PASSED
+tests/test_api.py::test_login_correto_zera_o_contador PASSED
+tests/test_api.py::test_resposta_traz_tempo_de_processamento PASSED
+tests/test_api.py::test_concentracao_ignora_maiusculas_e_espacos PASSED
+tests/test_desempenho.py::test_consulta_da_carteira_com_300_investimentos_em_ate_2s PASSED
+tests/test_rules.py::test_status_expira_ao_atingir_vencimento PASSED
+tests/test_rules.py::test_inativo_permanece_inativo PASSED
+tests/test_rules.py::test_alocacao_por_classe_soma_100 PASSED
+tests/test_rules.py::test_concentracao_nao_vale_com_poucos_ativos PASSED
+tests/test_rules.py::test_concentracao_excedida_com_tres_ativos PASSED
+tests/test_rules.py::test_proposta_dentro_do_perfil PASSED
+tests/test_rules.py::test_proposta_fora_do_perfil PASSED
+tests/test_rules.py::test_proposta_sem_saldo_na_classe_de_origem PASSED
+tests/test_rules.py::test_score_de_risco_limitado_a_100 PASSED
+======================== 37 passed, 1 warning in 21.40s ========================

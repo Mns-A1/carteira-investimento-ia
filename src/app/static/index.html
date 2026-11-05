@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carteira de Investimento com IA</title><link rel="icon" href="data:,">
+<style>
+:root{--n:#1E2761;--i:#CADCFC;--ok:#2C5F2D;--er:#B03A2E}*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;background:#F4F6FB;color:#1b2240}
+header{background:var(--n);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center}
+nav{display:flex;gap:6px;padding:10px 20px;background:#fff;border-bottom:1px solid #dde3f2;flex-wrap:wrap}
+nav button{background:none;border:0;padding:8px 14px;border-radius:8px;cursor:pointer;color:var(--n);font-weight:600}nav .on{background:var(--i)}
+main{max-width:1000px;margin:18px auto;padding:0 16px}.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px #1e276118;overflow-x:auto}
+h2,h3{margin:0 0 10px;color:var(--n)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid #eef1f8;font-size:14px}
+input,select{font:inherit;padding:8px 10px;border:1px solid #c5cde3;border-radius:8px}.b{font:inherit;padding:8px 12px;border:0;border-radius:8px;background:var(--n);color:#fff;cursor:pointer}.s{background:var(--i);color:var(--n)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}label{display:flex;flex-direction:column;font-size:12px;color:#5a6b8c;gap:3px}
+.bar{height:10px;background:#e4e9f6;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--n)}
+.tag{padding:2px 8px;border-radius:10px;font-size:12px;background:var(--i)}.bad{background:#f7d9d5;color:var(--er)}.good{background:#d8ecd8;color:var(--ok)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:10px;color:#fff;display:none;max-width:90%;z-index:9}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.kpi b{display:block;font-size:22px;color:var(--n)}small{color:#5a6b8c}
+</style></head><body><div id=app></div><div id=toast></div>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const S={t:localStorage.t||"",p:localStorage.p||"",tab:"",sel:null,modo:"login",ana:null,mes:""};
+const hoje=new Date().toISOString().slice(0,10),R$=v=>"R$ "+Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
+const T=["tesouro_selic","tesouro_ipca","tesouro_educa","cdb","cdi","acao","poupanca"],C=["tesouro","cdb_cdi","acoes","poupanca"],PR=["conservador","moderado","agressivo"];
+const opt=a=>a.map(x=>`<option>${x}</option>`).join("");
+function toast(m,ok){const e=$("#toast");e.textContent=m;e.style.background=ok?"#2C5F2D":"#B03A2E";e.style.display="block";clearTimeout(toast.x);toast.x=setTimeout(()=>e.style.display="none",4500)}
+async function api(path,method="GET",body,form){const o={method,headers:{}};if(S.t)o.headers.Authorization="Bearer "+S.t;
+ if(form)o.body=new URLSearchParams(form);else if(body){o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body)}
+ const r=await fetch(path,o);if(r.status===204)return null;const d=await r.json().catch(()=>({}));
+ if(!r.ok){if(r.status===401&&S.t)sair();throw new Error(Array.isArray(d.detail)?d.detail.map(x=>(x.loc||[]).slice(1).join(".")+": "+x.msg).join("; "):d.detail||"Erro")}return d}
+const go=async f=>{try{return await f()}catch(e){toast(e.message)}};
+function sair(){localStorage.clear();S.t=S.p="";S.tab="";S.sel=S.ana=null;render()}
+
+const carteiraHTML=(c,ed)=>`<div class=card><div class=kpis><div class=kpi><small>Total ativo</small><b>${R$(c.total_ativo)}</b></div><div class=kpi><small>Perfil de risco</small><b>${c.perfil_risco}</b></div><div class=kpi><small>Limite por ativo</small><b>${c.limite_concentracao}%</b></div></div></div>`
++(c.alertas_concentracao.length?`<div class=card><h3>Alertas de concentração</h3>${c.alertas_concentracao.map(a=>`<span class="tag bad">${esc(a.ativo)}: ${a.percentual}% (limite ${a.limite}%)</span>`).join(" ")}</div>`:"")
++`<div class=card><h3>Alocação por classe</h3>${Object.entries(c.alocacao_por_classe).map(([k,v])=>`<div style="margin:6px 0"><small>${k} — ${v}%</small><div class=bar><i style="width:${v}%"></i></div></div>`).join("")}</div>
+<div class=card><h3>Investimentos</h3><table><tr><th>Ativo</th><th>Tipo</th><th>Valor</th><th>%</th><th>Status</th><th></th></tr>${c.investimentos.map(i=>`<tr><td>${esc(i.nome)}</td><td>${i.tipo}</td><td>${R$(i.valor_aplicado)}</td><td>${i.percentual}%</td><td><span class="tag ${i.status=="ativo"?"good":""}">${i.status}</span>${i.bloqueado?' <span class="tag bad">bloqueado</span>':""}</td><td>${ed?(i.status=="ativo"?`<button class="b s" data-a=aporte data-id=${i.id}>Aportar</button> <button class="b s" data-a=ganho data-id=${i.id} data-t=${i.tipo}>+ Ganho</button> <button class="b s" data-a=inativar data-id=${i.id}>Inativar</button>`:`<button class="b s" data-a=remover data-id=${i.id}>Remover</button>`):(i.bloqueado?`<button class="b s" data-a=liberar data-id=${i.id}>Liberar</button>`:"")}</td></tr>`).join("")||"<tr><td colspan=6>Nenhum investimento ainda.</td></tr>"}</table></div>`;
+const anaHTML=(a,cons)=>{const r=a.resultado;return `<div class=card><h3>Resultado da análise <span class=tag>${a.fonte}</span></h3><div class=kpis><div class=kpi><small>Score de risco</small><b>${r.score_risco}/100</b></div></div><p><b>Alertas:</b> ${r.concentracao_alertas.map(x=>`<span class="tag bad">${esc(x.ativo)} ${x.percentual}%</span>`).join(" ")||"nenhum"}</p><p><b>Sugestões:</b></p><ul>${r.sugestoes_rebalanceamento.map(s=>`<li>Mover <b>${s.percentual}%</b> de ${s.classe_de} para ${s.classe_para}: ${esc(s.justificativa)}</li>`).join("")||"<li>Nenhuma sugestão.</li>"}</ul><small>${a.aviso}</small>${cons&&r.sugestoes_rebalanceamento.length?`<p><button class=b data-a=gprop data-id=${a.id}>Gerar proposta com estas sugestões</button></p>`:""}</div>`};
+const propHTML=(l,inv)=>l.map(p=>{const pend=inv&&p.status=="pendente";return `<div class=card><h3>Proposta #${p.id} <span class=tag>${p.origem}</span> <span class="tag ${p.status=="pendente"?"":p.status=="recusada"?"bad":"good"}">${p.status}</span></h3><p>${esc(p.justificativa)}</p><ul style="list-style:none;padding:0">${p.ajustes.map(a=>`<li>${pend?`<input type=checkbox data-p=${p.id} value=${a.id}> `:""}Mover ${a.percentual}% de ${a.classe_de} para ${a.classe_para} ${a.aceito===true?"✔":a.aceito===false?"✖":""}</li>`).join("")}</ul>${pend?`<button class=b data-a=resp data-id=${p.id} data-d=aceitar>Aceitar tudo</button> <button class="b s" data-a=resp data-id=${p.id} data-d=parcial>Aceitar marcados</button> <button class="b s" data-a=resp data-id=${p.id} data-d=recusar>Recusar</button>`:""}</div>`}).join("")||`<div class=card>Nenhuma proposta ainda.</div>`;
+
+const VIEWS={
+carteira:async()=>carteiraHTML(await api("/carteira"),true)+`<div class=card><h3>Novo investimento</h3><form id=fi class=row><label>Tipo<select name=tipo>${opt(T)}</select></label><label>Nome / ativo<input name=nome required placeholder="ITUB3"></label><label>Valor (R$)<input name=valor_aplicado type=number step=0.01 min=0.01 required></label><label>Aplicação<input name=data_aplicacao type=date required value="${hoje}"></label><label>Vencimento<input name=data_vencimento type=date></label><button class=b>Registrar</button></form></div>`,
+ganhos:async()=>{const r=await api("/ganhos/resumo?mes="+(S.mes||hoje.slice(0,7)));return `<div class=card><form id=fm class=row><label>Mês<input type=month name=mes value="${r.mes}"></label><button class="b s">Ver</button></form><h3 style="margin-top:12px">Total do mês: ${R$(r.total_consolidado)}</h3><table><tr><th>Ativo</th><th>Total</th></tr>${r.por_ativo.map(x=>`<tr><td>${esc(x.nome)}${x.removido?" <small>(removido)</small>":""}</td><td>${R$(x.total)}</td></tr>`).join("")||"<tr><td colspan=2>Sem ganhos neste mês. Use “+ Ganho” na aba Carteira.</td></tr>"}</table></div>`},
+analise:async()=>`<div class=card><h3>Análise de risco</h3><p>A análise é só um insumo: nada muda na carteira sem uma proposta aceita por você.</p><button class=b data-a=analisar>Analisar minha carteira</button></div>`+(S.ana?anaHTML(S.ana):""),
+propostas:async()=>propHTML(await api(S.p=="consultor"?"/consultor/propostas":"/propostas"),S.p=="investidor"),
+consultor:async()=>`<div class=card><h3>Meu consultor</h3><form id=fv class=row><label>E-mail do consultor<input name=email_consultor type=email required></label><button class=b>Vincular</button><button type=button class="b s" data-a=desvincular>Desvincular</button></form></div><div class=card><h3>Meu perfil de risco</h3><form id=fr class=row><select name=perfil_risco>${opt(PR)}</select><button class=b>Salvar</button></form><small>Máximo de ações: conservador 10%, moderado 30%, agressivo 60%.</small></div>`,
+historico:async()=>`<div class=card><h3>Histórico</h3><table>${(await api("/historico")).map(e=>`<tr><td><small>${e.quando.slice(0,16).replace("T"," ")}</small></td><td>${e.tipo}</td><td>${esc(e.descricao)}</td></tr>`).join("")}</table></div>`,
+clientes:async()=>{const l=await api("/consultor/investidores");
+ let h=`<div class=card><h3>Investidores vinculados</h3><table><tr><th>Nome</th><th>Perfil</th><th>Limite</th><th></th></tr>${l.map(i=>`<tr><td>${esc(i.nome)}</td><td>${i.perfil_risco}</td><td>${i.limite_concentracao}%</td><td><button class="b s" data-a=abrir data-id=${i.id}>Abrir</button></td></tr>`).join("")||"<tr><td colspan=4>Nenhum investidor vinculou você ainda (ele faz isso na aba “Meu consultor”).</td></tr>"}</table></div>`;
+ if(S.sel){const c=await api(`/consultor/investidores/${S.sel}/carteira`);
+  h+=carteiraHTML(c,false)+`<div class=card><h3>Ações do consultor</h3><form id=fl class=row><label>Limite de concentração (%)<input name=limite_concentracao type=number min=1 max=100 value=${c.limite_concentracao}></label><button class=b>Definir limite</button><button type=button class="b s" data-a=analisar>Analisar com IA</button></form></div>`+(S.ana?anaHTML(S.ana,true):"")
+  +`<div class=card><h3>Propor rebalanceamento</h3><form id=fp class=row><label>De<select name=classe_de>${opt(C)}</select></label><label>Para<select name=classe_para>${opt(C)}</select></label><label>%<input name=percentual type=number step=0.01 min=0.01 max=100 required></label><label>Justificativa<input name=justificativa required></label><button class=b>Enviar proposta</button></form></div>`}
+ return h}};
+const TABS={investidor:[["carteira","Carteira"],["ganhos","Ganhos"],["analise","Análise IA"],["propostas","Propostas"],["consultor","Meu consultor"],["historico","Histórico"]],consultor:[["clientes","Investidores"],["propostas","Propostas enviadas"]]};
+
+function authView(){const r=S.modo=="registro";$("#app").innerHTML=`<main><div class=card style="max-width:420px;margin:40px auto"><h2>Carteira de Investimento com IA</h2><p><small>Investidores acompanham a carteira; consultores propõem ajustes; a IA analisa, mas quem decide é o investidor.</small></p><div class=row style="margin:10px 0"><button class="b ${r?"s":""}" data-m=login>Entrar</button><button class="b ${r?"":"s"}" data-m=registro>Criar conta</button></div><form id=fa class=row style="flex-direction:column;align-items:stretch">${r?`<label>Nome<input name=nome required minlength=2></label>`:""}<label>E-mail<input name=email type=email required></label><label>Senha<input name=senha type=password required minlength=6></label>${r?`<label>Perfil<select name=perfil><option value=investidor>Investidor</option><option value=consultor>Consultor</option></select></label><label>Perfil de risco (investidor)<select name=perfil_risco>${opt(PR)}</select></label>`:""}<button class=b>${r?"Criar conta e entrar":"Entrar"}</button></form><p><small>Demonstração: investidor@demo.com ou consultor@demo.com, senha demo1234 (rode <code>python -m src.seed</code>).</small></p></div></main>`}
+async function render(){if(!S.t)return authView();S.tab=S.tab||TABS[S.p][0][0];
+ $("#app").innerHTML=`<header><b>Carteira de Investimento com IA</b><span>${S.p} <button class="b s" data-out=1>Sair</button></span></header><nav>${TABS[S.p].map(([k,l])=>`<button class="${k==S.tab?"on":""}" data-tab=${k}>${l}</button>`).join("")}</nav><main id=m>Carregando…</main>`;
+ $("#m").innerHTML=(await go(()=>VIEWS[S.tab]()))||""}
+
+async function act(d){await go(async()=>{const id=d.id,n=v=>+String(v).replace(",",".");
+ if(d.a=="aporte"){const v=prompt("Valor do aporte (R$):");if(!v)return;await api(`/investimentos/${id}/aportes`,"POST",{valor:n(v)});toast("Aporte registrado",1)}
+ else if(d.a=="ganho"){const v=prompt("Valor do ganho recebido (R$):");if(!v)return;await api("/ganhos","POST",{investimento_id:+id,valor:n(v),data:hoje,tipo:d.t=="acao"?"dividendo":"rendimento"});toast("Ganho registrado",1)}
+ else if(d.a=="inativar")await api(`/investimentos/${id}/inativar`,"PATCH");
+ else if(d.a=="remover"){if(!confirm("Remover da carteira? Os ganhos continuam aparecendo."))return;await api(`/investimentos/${id}`,"DELETE")}
+ else if(d.a=="desvincular"){await api("/vinculo","DELETE");toast("Vínculo removido",1)}
+ else if(d.a=="analisar")S.ana=await api(S.p=="consultor"?`/consultor/investidores/${S.sel}/analise`:"/analise","POST");
+ else if(d.a=="gprop"){await api(`/consultor/analises/${id}/proposta`,"POST");toast("Proposta criada a partir da análise",1);S.tab="propostas"}
+ else if(d.a=="liberar"){await api(`/consultor/investimentos/${id}/liberar`,"POST");toast("Ativo liberado",1)}
+ else if(d.a=="abrir"){S.sel=+id;S.ana=null}
+ else if(d.a=="resp"){const b={decisao:d.d};if(d.d=="parcial")b.ajustes_aceitos=[...document.querySelectorAll(`[data-p="${id}"]:checked`)].map(x=>+x.value);const r=await api(`/propostas/${id}/responder`,"POST",b);toast("Proposta "+r.status,1)}
+ render()})}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-tab],[data-a],[data-m],[data-out]");if(!b)return;
+ if(b.dataset.out)return sair();if(b.dataset.m){S.modo=b.dataset.m;return authView()}
+ if(b.dataset.tab){S.tab=b.dataset.tab;S.sel=null;S.ana=null;return render()}act(b.dataset)});
+document.addEventListener("submit",async e=>{e.preventDefault();const f=e.target,v=Object.fromEntries(new FormData(f));
+ await go(async()=>{switch(f.id){
+ case"fa":{if(S.modo=="registro")await api("/auth/registrar","POST",v);const t=await api("/auth/login","POST",null,{username:v.email,password:v.senha});S.t=localStorage.t=t.access_token;S.p=localStorage.p=t.perfil;S.tab="";break}
+ case"fi":await api("/investimentos","POST",{...v,valor_aplicado:+v.valor_aplicado,data_vencimento:v.data_vencimento||null});toast("Investimento registrado",1);break;
+ case"fm":S.mes=v.mes;break;
+ case"fv":await api("/vinculo","PUT",v);toast("Consultor vinculado",1);break;
+ case"fr":await api("/perfil-risco","PATCH",v);toast("Perfil atualizado",1);break;
+ case"fl":await api(`/consultor/investidores/${S.sel}/limite`,"PATCH",{limite_concentracao:+v.limite_concentracao});toast("Limite atualizado",1);break;
+ case"fp":await api("/consultor/propostas","POST",{investidor_id:S.sel,justificativa:v.justificativa,ajustes:[{classe_de:v.classe_de,classe_para:v.classe_para,percentual:+v.percentual}]});toast("Proposta enviada ao investidor",1);break}
+ render()})});
+render();
+</script></body></html>
